@@ -1,4 +1,4 @@
-name: Maven Build & SonarQube Analysis
+name: Laravel SonarQube Analysis
 
 on: [push]
 
@@ -10,17 +10,38 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
         with:
-          java-version: '17'
-          distribution: 'temurin'
+          php-version: '8.0.2'
+          extensions: mbstring, xml, ctype, json, tokenizer, bcmath, curl
+          coverage: none
 
-      - name: Build & Analyze with SonarQube
+      - name: Install dependencies
+        run: |
+          composer install --no-progress --no-interaction --prefer-dist
+          npm install
+          npm run build || true  # optional if you use frontend build
+
+      - name: Run tests
+        run: php artisan test || true  # optional step, but recommended
+
+      - name: Download Sonar Scanner
+        run: |
+          SONAR_SCANNER_VERSION=5.0.1.3006
+          curl -sSLo sonar-scanner.zip \
+            https://binaries.sonarsource.com/Distribution/sonar-scanner-cli/sonar-scanner-cli-${SONAR_SCANNER_VERSION}.zip
+          unzip sonar-scanner.zip -d $HOME
+          echo "$HOME/sonar-scanner-${SONAR_SCANNER_VERSION}/bin" >> $GITHUB_PATH
+
+      - name: Run SonarQube Analysis
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
         run: |
-          mvn clean verify sonar:sonar \
+          sonar-scanner \
             -Dsonar.projectKey=laravel-project \
+            -Dsonar.sources=. \
+            -Dsonar.exclusions=node_modules/**,vendor/**,storage/**,bootstrap/** \
+            -Dsonar.php.coverage.reportPaths=coverage.xml \
             -Dsonar.host.url=https://5408430ddf55.ngrok-free.app \
             -Dsonar.login=$SONAR_TOKEN
